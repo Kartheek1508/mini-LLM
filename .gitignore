@@ -1,2 +1,4 @@
 fineweb_2gb.txt
 **/.ipynb_checkpoints/
+__pycache__/
+*.pyc
