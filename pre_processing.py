@@ -1,11 +1,7 @@
-
 from collections import Counter
 from langdetect import detect
 from datasketch import MinHash, MinHashLSH
-from tokenizer.tokenizer import tokenize
 import numpy as np
-import os
-
 
 def preprocess(docs):
 
@@ -264,44 +260,4 @@ def preprocess(docs):
 
     docs = kept
 
-    tokenized = tokenize(docs)
-
-    for split, dset in tokenized.items():
-        arr_len = np.sum(dset['len'], dtype=np.uint64)
-        filename = os.path.join(os.path.dirname(__file__), f'{split}.bin')
-        dtype = np.uint16 # (can do since enc.max_token_value == 50256 is < 2**16)
-        arr = np.memmap(filename, dtype=dtype, mode='w+', shape=(arr_len,))
-        total_batches = 1024
-
-        idx = 0
-        for batch_idx in tqdm(range(total_batches), desc=f'writing {filename}'):
-            # Batch together samples for faster write
-            batch = dset.shard(num_shards=total_batches, index=batch_idx, contiguous=True).with_format('numpy')
-            arr_batch = np.concatenate(batch['ids'])
-            # Write into mmap
-            arr[idx : idx + len(arr_batch)] = arr_batch
-            idx += len(arr_batch)
-        arr.flush()
-
     return docs
-
-
-'''
-This can be used for any dataset by using the following method
-from datasets import load_dataset
-# load dataset
-dataset = load_dataset(
-    "HuggingFaceFW/fineweb-edu",
-    name="sample-10BT",
-    split="train",
-    streaming=True
-)
-
-batch = []
-
-for sample in dataset.take(1000):
-    batch.append(sample["text"])
-docs = preprocessed(batch)
-
-print(f"{len(docs)} clean documents")
-print(f" removed : {len(batch) - len(docs)} documents")'''
