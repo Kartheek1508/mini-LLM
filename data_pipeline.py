@@ -9,6 +9,18 @@ import os
 
 from datasets import load_dataset
 
+class Token_dataset(Dataset):
+        def __init__(self,data):
+            self.data = data
+
+        def __getitem__(self, index):
+            start = np.random.randint(0, len(self.data) - 1024)
+            chunk = self.data[start:start + 1024].copy()
+            return torch.tensor(chunk, dtype=torch.long)
+
+        def __len__(self):
+            return len(self.data)
+
 def main():
 #loading dataset
     dataset = load_dataset(
@@ -54,18 +66,6 @@ def main():
 
 
     data = np.memmap("train.bin",dtype=np.uint16,mode="r")
-
-    class Token_dataset(Dataset):
-        def __init__(self,data):
-            self.data = data
-
-        def __getitem__(self, index):
-            start = np.random.randint(0, len(self.data) - 1024)
-            chunk = self.data[start:start + 1024].copy()
-            return torch.tensor(chunk, dtype=torch.long)
-
-        def __len__(self):
-            return len(self.data)
 
 
     data = np.memmap("train.bin",dtype=np.uint16,mode="r")
