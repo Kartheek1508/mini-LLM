@@ -88,7 +88,7 @@ class MultiHeadedAttention(nn.Module):
 
 def causal_mask(seq_length):
     mask = torch.ones(1,seq_length,seq_length)
-    mask= torch.tril(mask)
+    mask= torch. tril(mask)
     mask = mask.bool()
     return mask
 
