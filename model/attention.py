@@ -3,8 +3,7 @@ import torch
 import torch.nn as nn
 import copy
 import math
-from rope import RotaryEmbeddings
-
+from .rope import RotaryEmbeddings
 def clone(module,N):
     return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 #used to create copies of ecoders 

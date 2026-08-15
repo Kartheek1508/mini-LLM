@@ -1,9 +1,9 @@
-from attention import MultiHeadedAttention
-from rms import RMSNorm
-from SwigLUFFN import SwiGLUFFN
+from .attention import MultiHeadedAttention
+from .rms import RMSNorm
+from .SwigLUFFN import SwiGLUFFN
 import torch.nn as nn
 import torch
-from attention import causal_mask
+from .attention import causal_mask
 
 class TransformerBlock(nn.Module):
     def __init__(self,attention,rms1,rms2,swiglu):
