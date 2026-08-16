@@ -5,6 +5,7 @@ from model.transformer_block import Transformer,causal_mask
 from torch.optim import AdamW,lr_scheduler
 from torch.nn import CrossEntropyLoss
 import numpy as np
+import time
 import torch
 
 vocab_size = 35000
@@ -12,7 +13,7 @@ d_model = 512
 num_layers = 4
 heads = 8
 intermediate_dim = 2048
-seq_len = 1024
+seq_len = 512
 batch_size = 2
 
 model = Transformer(
@@ -23,10 +24,11 @@ model = Transformer(
     intermediate_dim=intermediate_dim
 )
 
+
 optimizer = AdamW(model.parameters(),lr=3e-4,betas=(0.9, 0.999),eps=1e-8,weight_decay=0.01)
 
-warmup_steps = 20
-total_steps = 100
+warmup_steps =5
+total_steps = 20
 min_lr = 1e-5
 max_lr = 3e-4
 
@@ -73,17 +75,69 @@ wandb.init(
         "grad_clip": 1.0,
     }
 )
+import torch
+
+if torch.cuda.is_available():
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available():
+    device = torch.device("mps")
+else:
+    device = torch.device("cpu")
+
+print("Device:", device)
+
+model = model.to(device)
 
 loss_fn = CrossEntropyLoss()
-for step,batch in enumerate(loader):
-    if step>=100:
-        break
-    inputs = batch[:,:-1]
-    target = batch[:,1:]
-    mask = causal_mask(inputs.size(1))
-    logits  = model(inputs,mask)
-    loss = loss_fn(logits.transpose(1,2),target)
-    loss.backward()
+accumilation_steps = 2
+peak_memory = 0
+torch.mps.synchronize()
+start_time = time.perf_counter()
+
+loader_iter = iter(loader)
+for step in range(total_steps):
+    optimizer.zero_grad()
+    total_loss=0
+    #fp32
+    """for i in range(accumilation_steps):
+
+        batch = next(loader_iter)
+        batch = batch.to(device)
+
+        inputs = batch[:, :-1]
+        target = batch[:, 1:]
+
+        mask = causal_mask(inputs.size(1)).to(device)
+        logits = model(inputs, mask)
+        actual_loss = loss_fn(logits.transpose(1,2),target)
+        scaled_loss = actual_loss/accumilation_steps
+        scaled_loss.backward()
+        total_loss += actual_loss"""
+
+    #bf16
+    for i in range(accumilation_steps):
+
+            batch = next(loader_iter)
+            batch = batch.to(device)
+
+            inputs = batch[:, :-1]
+            target = batch[:, 1:]
+
+            mask = causal_mask(inputs.size(1)).to(device)
+
+            with torch.autocast(
+                device_type="mps",
+                dtype=torch.bfloat16
+            ):
+                logits = model(inputs, mask)
+                actual_loss = loss_fn(
+                    logits.transpose(1, 2),
+                    target
+                )
+
+            scaled_loss = actual_loss / accumilation_steps
+            scaled_loss.backward()
+            total_loss += actual_loss
     grad_norm = torch.nn.utils.clip_grad_norm_(
     model.parameters(),
     max_norm=1.0
@@ -92,14 +146,29 @@ for step,batch in enumerate(loader):
     optimizer.step()
     scheduler.step()
     wandb.log({
-    "loss": loss.item(),
+    "loss": total_loss.item()/accumilation_steps,
     "gradient_norm": grad_norm.item(),
     "learning_rate": scheduler.get_last_lr()[0],}, step=step)
     print(
         f"step: {step}, "
-        f"loss: {loss.item():.4f}, "
+        f"loss: {actual_loss.item():.4f}, "
         f"grad_norm: {grad_norm.item():.4f}"
     )
-    optimizer.zero_grad()
+    torch.mps.synchronize()
+    current_memory = torch.mps.driver_allocated_memory()
+    peak_memory = max(current_memory,peak_memory)
 
 wandb.finish()
+torch.mps.synchronize()
+end_time = time.perf_counter()
+total_time = end_time-start_time
+print("Total Time: ",total_time,"Sec")
+tokens_per_step = (seq_len-1)*batch_size*accumilation_steps # -1 cause we are shifting
+tokens_per_sec = (tokens_per_step *total_steps)/total_time
+print("Tokens per second: ",tokens_per_sec)
+
+peak_memory_mb = peak_memory / (1024 ** 2)
+
+print("Peak MPS memory:", peak_memory_mb, "MB")
+"""x = torch.randn(10, 10, device=device, dtype=torch.bfloat16)
+print(x.dtype)"""
