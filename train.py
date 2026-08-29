@@ -15,7 +15,8 @@ heads = 8
 intermediate_dim = 2048
 seq_len = 512
 batch_size = 2
-
+use_amp = True
+accumilation_steps = 2
 model = Transformer(
     vocab_size=vocab_size,
     d_model=d_model,
@@ -31,6 +32,12 @@ warmup_steps =5
 total_steps = 20
 min_lr = 1e-5
 max_lr = 3e-4
+
+def synchronize():
+    if device.type == "cuda":
+        torch.cuda.synchronize()
+    elif device.type == "mps":
+        torch.mps.synchronize()
 
 def lr_lambda(step):
     # Warmup
@@ -60,6 +67,8 @@ wandb.init(
     project="mini-llm",
     entity="bnsk",
     config={
+        "precision": "bf16" if use_amp else "fp32",
+    "gradient_accumulation_steps": accumilation_steps,
         "vocab_size": vocab_size,
         "d_model": d_model,
         "num_layers": num_layers,
@@ -84,14 +93,20 @@ elif torch.backends.mps.is_available():
 else:
     device = torch.device("cpu")
 
-print("Device:", device)
+if device.type == "cuda":
+    torch.cuda.synchronize()
+
+
 
 model = model.to(device)
 
 loss_fn = CrossEntropyLoss()
-accumilation_steps = 2
+
 peak_memory = 0
-torch.mps.synchronize()
+synchronize()
+
+if device.type == "cuda":
+    torch.cuda.reset_peak_memory_stats()
 start_time = time.perf_counter()
 
 loader_iter = iter(loader)
@@ -125,19 +140,17 @@ for step in range(total_steps):
 
             mask = causal_mask(inputs.size(1)).to(device)
 
-            with torch.autocast(
-                device_type="mps",
-                dtype=torch.bfloat16
-            ):
+            if use_amp:
+                with torch.autocast(device_type=device.type,dtype=torch.bfloat16):
+                    logits = model(inputs, mask)
+                    actual_loss = loss_fn(logits.transpose(1, 2),target)
+            else:
                 logits = model(inputs, mask)
-                actual_loss = loss_fn(
-                    logits.transpose(1, 2),
-                    target
-                )
+                actual_loss = loss_fn(logits.transpose(1, 2),target)
 
             scaled_loss = actual_loss / accumilation_steps
             scaled_loss.backward()
-            total_loss += actual_loss
+            total_loss += actual_loss.item()
     grad_norm = torch.nn.utils.clip_grad_norm_(
     model.parameters(),
     max_norm=1.0
@@ -146,20 +159,24 @@ for step in range(total_steps):
     optimizer.step()
     scheduler.step()
     wandb.log({
-    "loss": total_loss.item()/accumilation_steps,
+    "loss": total_loss/accumilation_steps,
     "gradient_norm": grad_norm.item(),
     "learning_rate": scheduler.get_last_lr()[0],}, step=step)
     print(
         f"step: {step}, "
-        f"loss: {actual_loss.item():.4f}, "
-        f"grad_norm: {grad_norm.item():.4f}"
-    )
-    torch.mps.synchronize()
-    current_memory = torch.mps.driver_allocated_memory()
-    peak_memory = max(current_memory,peak_memory)
+        f"loss: {total_loss/accumilation_steps:.4f}, "
+        f"grad_norm: {grad_norm.item():.4f}")
+
+if device.type == "cuda":
+        peak_memory = torch.cuda.max_memory_allocated()
+elif device.type == "mps":
+        peak_memory = torch.mps.driver_allocated_memory()
+else:
+        peak_memory = 0 
+
 
 wandb.finish()
-torch.mps.synchronize()
+synchronize()
 end_time = time.perf_counter()
 total_time = end_time-start_time
 print("Total Time: ",total_time,"Sec")
@@ -169,6 +186,6 @@ print("Tokens per second: ",tokens_per_sec)
 
 peak_memory_mb = peak_memory / (1024 ** 2)
 
-print("Peak MPS memory:", peak_memory_mb, "MB")
+print("Peak memory:", peak_memory_mb, "MB")
 """x = torch.randn(10, 10, device=device, dtype=torch.bfloat16)
 print(x.dtype)"""
