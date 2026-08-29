@@ -10,16 +10,19 @@ import os
 from datasets import load_dataset
 
 class Token_dataset(Dataset):
-        def __init__(self,data):
-            self.data = data
+    def __init__(self, data, seq_len):
+        self.data = data
+        self.seq_len = seq_len
 
-        def __getitem__(self, index):
-            start = np.random.randint(0, len(self.data) - 1024)
-            chunk = self.data[start:start + 1024].copy()
-            return torch.tensor(chunk, dtype=torch.long)
+    def __getitem__(self, index):
+        start = np.random.randint(0,len(self.data) - self.seq_len)
 
-        def __len__(self):
-            return len(self.data)
+        chunk = self.data[start:start + self.seq_len].copy()
+
+        return torch.tensor(chunk, dtype=torch.long)
+
+    def __len__(self):
+        return len(self.data)
 
 def main():
 #loading dataset

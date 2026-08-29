@@ -53,10 +53,10 @@ scheduler = lr_scheduler.LambdaLR(
     optimizer,
     lr_lambda=lr_lambda
 )
-
+num_params = sum(p.numel() for p in model.parameters())
 data = np.memmap("train.bin",dtype=np.uint16,mode="r")
 
-dataset = Token_dataset(data)
+dataset = Token_dataset(data,seq_len)
 
 loader = DataLoader(
     dataset,
@@ -82,6 +82,8 @@ wandb.init(
         "total_steps": total_steps,
         "weight_decay": 0.01,
         "grad_clip": 1.0,
+        "parameters": num_params,
+        "parameters_millions": num_params / 1e6,
     }
 )
 import torch
@@ -175,9 +177,10 @@ else:
         peak_memory = 0 
 
 
-wandb.finish()
+
 synchronize()
 end_time = time.perf_counter()
+wandb.finish()
 total_time = end_time-start_time
 print("Total Time: ",total_time,"Sec")
 tokens_per_step = (seq_len-1)*batch_size*accumilation_steps # -1 cause we are shifting
