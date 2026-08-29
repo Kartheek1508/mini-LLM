@@ -55,7 +55,6 @@ class Transformer(nn.Module):
         for block in self.blocks:
             x = block(x, mask)
         x= self.final_norm(x)
-        x = self.final_norm(x)
         logits = self.lm_head(x)
 
         return logits
