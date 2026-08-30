@@ -7,8 +7,9 @@ import numpy as np
 import torch
 import os
 import json
+from datasets import load_dataset, DownloadConfig
 
-from datasets import load_dataset
+download_config = DownloadConfig(max_retries=10, token=True)
 
 class Token_dataset(Dataset):
     def __init__(self, data, seq_len):
@@ -26,14 +27,13 @@ class Token_dataset(Dataset):
         return len(self.data)
 
 def main():
-    TARGET_TOKENS = 1_000_000
-
     dataset = load_dataset(
-        "HuggingFaceFW/fineweb-edu",
-        name="sample-10BT",
-        split="train",
-        streaming=True
-    )
+    "HuggingFaceFW/fineweb-edu",
+    name="sample-10BT",
+    split="train",
+    streaming=True,
+    download_config=download_config
+)
 
     filename = "train.bin"
     progress_file = "progress.json"
@@ -173,7 +173,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
-
-if __name__ =="__main__":
     main()
