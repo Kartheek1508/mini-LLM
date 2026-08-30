@@ -9,11 +9,11 @@ import time
 import torch
 
 vocab_size = 35000
-d_model = 512
-num_layers = 4
-heads = 8
-intermediate_dim = 2048
-seq_len = 512
+d_model = 768
+num_layers = 5
+heads = 12
+intermediate_dim = 3072
+seq_len = 1024
 batch_size = 2
 use_amp = True
 accumilation_steps = 2
