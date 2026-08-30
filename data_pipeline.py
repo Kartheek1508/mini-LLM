@@ -1,5 +1,5 @@
 from pre_processing import preprocess
-from tokenizer.tokenizer import tokenize
+from tokenizer.tokenizer import tokenize_batch
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from huggingface_hub import HfApi, hf_hub_download
@@ -105,11 +105,12 @@ def main():
 
                 docs = preprocess(texts)
 
+                encoded_docs = tokenize_batch(docs)
+
                 token_ids = []
 
-                for doc in docs:
-                    token_ids.extend(tokenize(doc))
-
+                for ids in encoded_docs:
+                    token_ids.extend(ids)
                 remaining = TARGET_TOKENS - total_tokens
 
                 if len(token_ids) > remaining:
