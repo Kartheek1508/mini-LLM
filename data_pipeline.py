@@ -27,6 +27,8 @@ class Token_dataset(Dataset):
         return len(self.data)
 
 def main():
+    TARGET_TOKENS = 1_000_000
+
     dataset = load_dataset(
     "HuggingFaceFW/fineweb-edu",
     name="sample-10BT",
