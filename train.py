@@ -49,18 +49,27 @@ def lr_lambda(step):
 
     return (min_lr / max_lr) + (1 - min_lr / max_lr) * cosine
 
+
+
 scheduler = lr_scheduler.LambdaLR(
     optimizer,
     lr_lambda=lr_lambda
 )
 num_params = sum(p.numel() for p in model.parameters())
 data = np.memmap("train.bin",dtype=np.uint16,mode="r")
+val_data = np.memmap("val.bin",dtype = np.uint16,mode = "r")
 
 dataset = Token_dataset(data,seq_len)
+val_dataset = Token_dataset(val_data,seq_len)
 
 loader = DataLoader(
     dataset,
     batch_size=batch_size
+)
+
+val_loader = DataLoader(
+     val_dataset,
+     batch_size=batch_size
 )
 
 wandb.init(
@@ -103,6 +112,36 @@ if device.type == "cuda":
 model = model.to(device)
 
 loss_fn = CrossEntropyLoss()
+
+@torch.no_grad()
+def evaluate():
+    model.eval()
+    val_loss=0
+    val_iter = iter(val_loader)
+    for _ in range(20):
+        
+        val_batch = next(val_iter)
+        val_batch = val_batch.to(device)
+
+        inputs = val_batch[:, :-1]
+        target = val_batch[:, 1:]
+
+        mask = causal_mask(inputs.size(1)).to(device)
+
+        if use_amp:
+            with torch.autocast(device_type=device.type,dtype=torch.bfloat16):
+                logits = model(inputs, mask)
+                actual_loss = loss_fn(logits.transpose(1, 2),target)
+        else:
+            logits = model(inputs, mask)
+            actual_loss = loss_fn(logits.transpose(1, 2),target)
+        val_loss += actual_loss.item()
+    model.train()
+    wandb.log({"val_loss": val_loss/20})
+    return val_loss/20
+
+        
+
 
 peak_memory = 0
 synchronize()
@@ -168,6 +207,8 @@ for step in range(total_steps):
         f"step: {step}, "
         f"loss: {total_loss/accumilation_steps:.4f}, "
         f"grad_norm: {grad_norm.item():.4f}")
+    if step == total_steps - 1:
+        print(evaluate())
 
 if device.type == "cuda":
         peak_memory = torch.cuda.max_memory_allocated()
