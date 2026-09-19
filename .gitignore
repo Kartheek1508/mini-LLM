@@ -3,3 +3,6 @@ fineweb_2gb.txt
 __pycache__/
 *.pyc
 train.bin
+
+val.bin
+wandb/
