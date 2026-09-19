@@ -238,7 +238,7 @@ for step in range(start_step,total_steps):
     wandb.log({
     "loss": total_loss/accumilation_steps,
     "gradient_norm": grad_norm.item(),
-    "learning_rate": scheduler.get_last_lr()[0],}, step=step)
+    "learning_rate": scheduler.get_last_lr()[0],"val_loss":val_loss}, step=step,)
     print(
         f"step: {step}, "
         f"loss: {total_loss/accumilation_steps:.4f}, "
@@ -246,9 +246,14 @@ for step in range(start_step,total_steps):
 
     if (step + 1) % 1000 == 0:
         save_checkpoint(step + 1)
-    if step == total_steps - 1:
-        print(evaluate())
+        val_loss = evaluate()
+        print(f"step: {step + 1}, val_loss: {val_loss:.4f}")
 
+    if step == total_steps - 1:
+        if (step + 1) % 1000 != 0:
+            save_checkpoint(total_steps)
+            val_loss = evaluate()
+            print(f"step: {total_steps}, val_loss: {val_loss:.4f}")
 save_checkpoint(total_steps)
 
 if device.type == "cuda":
