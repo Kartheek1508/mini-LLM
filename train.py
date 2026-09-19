@@ -159,7 +159,24 @@ def save_checkpoint(step):
 
     print(f"Checkpoint saved at step {step}")
         
+def load_checkpoint():
+    path = "checkpoints/latest.pt"
 
+    if not os.path.exists(path):
+        print("No checkpoint found. Starting from scratch.")
+        return 0
+
+    checkpoint = torch.load(path, map_location=device)
+
+    model.load_state_dict(checkpoint["model_state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+    step = checkpoint["step"]
+
+    print(f"Resuming from step {step}")
+
+    return step
 
 peak_memory = 0
 synchronize()
@@ -168,8 +185,9 @@ if device.type == "cuda":
     torch.cuda.reset_peak_memory_stats()
 start_time = time.perf_counter()
 
+start_step = load_checkpoint()
 loader_iter = iter(loader)
-for step in range(total_steps):
+for step in range(start_step,total_steps):
     optimizer.zero_grad()
     total_loss=0
     #fp32
@@ -230,6 +248,8 @@ for step in range(total_steps):
         save_checkpoint(step + 1)
     if step == total_steps - 1:
         print(evaluate())
+
+save_checkpoint(total_steps)
 
 if device.type == "cuda":
         peak_memory = torch.cuda.max_memory_allocated()
