@@ -3,6 +3,6 @@ fineweb_2gb.txt
 __pycache__/
 *.pyc
 train.bin
-
+checkpoints/
 val.bin
 wandb/
