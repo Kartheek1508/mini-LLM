@@ -7,6 +7,7 @@ from torch.nn import CrossEntropyLoss
 import numpy as np
 import time
 import torch
+import os
 
 vocab_size = 35000
 d_model = 768
@@ -14,7 +15,7 @@ num_layers = 5
 heads = 12
 intermediate_dim = 3072
 seq_len = 1024
-batch_size = 2
+batch_size = 16
 use_amp = True
 accumilation_steps = 2
 model = Transformer(
@@ -28,8 +29,8 @@ model = Transformer(
 
 optimizer = AdamW(model.parameters(),lr=3e-4,betas=(0.9, 0.999),eps=1e-8,weight_decay=0.01)
 
-warmup_steps =5
-total_steps = 20
+warmup_steps =500
+total_steps = 61706
 min_lr = 1e-5
 max_lr = 3e-4
 
@@ -140,6 +141,23 @@ def evaluate():
     wandb.log({"val_loss": val_loss/20})
     return val_loss/20
 
+def save_checkpoint(step):
+    os.makedirs("checkpoints", exist_ok=True)
+
+    checkpoint = {
+        "step": step,
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict(),
+        "scheduler_state_dict": scheduler.state_dict(),
+    }
+
+    temp_path = "checkpoints/latest.tmp.pt"
+    final_path = "checkpoints/latest.pt"
+
+    torch.save(checkpoint, temp_path)
+    os.replace(temp_path, final_path)
+
+    print(f"Checkpoint saved at step {step}")
         
 
 
@@ -207,6 +225,9 @@ for step in range(total_steps):
         f"step: {step}, "
         f"loss: {total_loss/accumilation_steps:.4f}, "
         f"grad_norm: {grad_norm.item():.4f}")
+
+    if (step + 1) % 1000 == 0:
+        save_checkpoint(step + 1)
     if step == total_steps - 1:
         print(evaluate())
 
